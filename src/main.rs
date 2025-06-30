@@ -246,6 +246,58 @@ pub async fn mint_token(Json(payload): Json<MintTokenRequest>) -> impl IntoRespo
 
 
 
+// 4th one
+#[derive(Deserialize)]
+struct SignMessageRequest {
+    message: String,
+    secret: String,
+}
+
+#[derive(Serialize)]
+struct SignMessageResponse {
+    signature: String,    
+    public_key: String,   
+    message: String,
+}
+
+async fn sign_message(Json(payload): Json<SignMessageRequest>) -> impl IntoResponse {
+    // Decode the base58 secret key
+    let secret_bytes = match bs58::decode(&payload.secret).into_vec() {
+        Ok(bytes) if bytes.len() == 64 => bytes,
+        _ => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Invalid or malformed secret key".into(),
+            }).into_response();
+        }
+    };
+
+    // Reconstruct Keypair from 64-byte secret
+    let keypair = match Keypair::from_bytes(&secret_bytes) {
+        Ok(kp) => kp,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Failed to construct keypair from secret".into(),
+            }).into_response();
+        }
+    };
+
+    // Sign the message
+    let signature = keypair.sign_message(payload.message.as_bytes());
+
+    // Prepare response
+    let res = SignMessageResponse {
+        signature: base64::encode(signature.as_ref()),
+        public_key: keypair.pubkey().to_string(),
+        message: payload.message,
+    };
+
+    Json(SuccessResponse {
+        success: true,
+        data: res,
+    }).into_response()
+}
 
 
 #[tokio::main]
@@ -253,7 +305,8 @@ async fn main() {
     let app = Router::new().route("/check-health", get(check_health))
         .route("/keypair", post(create_wallet))
         .route("/token/create", post(create_token))
-        .route("/token/mint", post(mint_token));
+        .route("/token/mint", post(mint_token))
+        .route("/message/sign", post(sign_message));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
