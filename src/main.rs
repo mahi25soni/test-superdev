@@ -7,11 +7,14 @@ use axum:: {
 use serde::{Serialize, Deserialize};
 
 use solana_sdk::{
+    signature::Signature,
   signature::{Keypair, Signer},
       instruction::{AccountMeta, Instruction},
     system_program,
 };
 use solana_program::pubkey::Pubkey;
+
+
 use spl_token::instruction::initialize_mint;
 
 use bs58;
@@ -300,13 +303,85 @@ async fn sign_message(Json(payload): Json<SignMessageRequest>) -> impl IntoRespo
 }
 
 
+// 5thhh
+#[derive(Deserialize)]
+struct VerifyMessageRequest {
+    message: String,
+    signature: String, 
+    pubkey: String,   
+}
+
+#[derive(Serialize)]
+struct VerifyMessageResponse {
+    valid: bool,
+    message: String,
+    pubkey: String,
+}
+
+pub async fn verify_message(Json(payload): Json<VerifyMessageRequest>) -> impl IntoResponse {
+    // Decode the public key
+    let pubkey = match bs58::decode(&payload.pubkey).into_vec() {
+        Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
+            Ok(pk) => pk,
+            Err(_) => {
+                return Json(ErrorResponse {
+                    success: false,
+                    error: "Invalid public key".into(),
+                }).into_response();
+            }
+        },
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Failed to decode public key from base58".into(),
+            }).into_response();
+        }
+    };
+
+    // Decode the base64 signature
+    let signature_bytes = match base64::decode(&payload.signature) {
+        Ok(sig) => sig,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Failed to decode signature from base64".into(),
+            }).into_response();
+        }
+    };
+
+    let signature = match Signature::try_from(signature_bytes.as_slice()) {
+        Ok(sig) => sig,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Invalid signature format".into(),
+            }).into_response();
+        }
+    };
+
+    // Perform verification
+    let valid = signature.verify(pubkey.as_ref(), payload.message.as_bytes());
+
+    let res = VerifyMessageResponse {
+        valid,
+        message: payload.message,
+        pubkey: payload.pubkey,
+    };
+
+    Json(SuccessResponse {
+        success: true,
+        data: res,
+    }).into_response()
+}
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/check-health", get(check_health))
         .route("/keypair", post(create_wallet))
         .route("/token/create", post(create_token))
         .route("/token/mint", post(mint_token))
-        .route("/message/sign", post(sign_message));
+        .route("/message/sign", post(sign_message))
+        .route("/message/verify", post(verify_message));
+
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
