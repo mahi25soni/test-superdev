@@ -40,7 +40,7 @@ struct ErrorResponse {
 #[derive(Serialize)]
 struct WalletResponse {
     pubkey : String,
-    secret_key : String
+    secret : String
 }
 pub async fn create_wallet() -> impl IntoResponse {
     let keypair = Keypair::new();
@@ -50,7 +50,7 @@ pub async fn create_wallet() -> impl IntoResponse {
 
     let res = WalletResponse {
         pubkey : public_key,
-        secret_key : final_private_key
+        secret : final_private_key
     };
     Json(SuccessResponse {
         success: true,
