@@ -47,25 +47,19 @@ struct WalletResponse {
 }
 pub async fn create_wallet() -> impl IntoResponse {
     let keypair = Keypair::new();
-
-    // Convert public key to base64
-    let public_key_base64 = base64::encode(keypair.pubkey().as_ref());
-
-
-    let private_key_bytes = keypair.to_bytes();
-    let private_key_base64 = base64::encode(private_key_bytes);
+    let public_key = keypair.pubkey().to_string();
+    let private_key_in_bytes = keypair.to_bytes();
+    let final_private_key = bs58::encode(private_key_in_bytes).into_string();
 
     let res = WalletResponse {
-        pubkey: public_key_base64,
-        secret: private_key_base64,
+        pubkey : public_key,
+        secret : final_private_key
     };
-
     Json(SuccessResponse {
         success: true,
         data: res,
     })
 }
-
 
 
 
