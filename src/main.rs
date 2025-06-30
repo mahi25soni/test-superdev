@@ -152,12 +152,108 @@ pub async fn create_token(Json(payload): Json<CreateTokenRequest>) -> impl IntoR
 
 
 
+// now 3rd api
+#[derive(Deserialize)]
+struct MintTokenRequest {
+    mint: String,
+    destination: String,
+    authority: String,
+    amount: u64,
+}
+
+use spl_token::instruction::mint_to;
+
+pub async fn mint_token(Json(payload): Json<MintTokenRequest>) -> impl IntoResponse {
+    // Validate `mint`
+    let mint = match Pubkey::from_str(&payload.mint) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Invalid mint public key".into(),
+            }).into_response();
+        }
+    };
+
+    // Validate `destination`
+    let destination = match Pubkey::from_str(&payload.destination) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Invalid destination public key".into(),
+            }).into_response();
+        }
+    };
+
+    // Validate `authority`
+    let authority = match Pubkey::from_str(&payload.authority) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Invalid authority public key".into(),
+            }).into_response();
+        }
+    };
+
+    // Validate `amount`
+    if payload.amount == 0 {
+        return Json(ErrorResponse {
+            success: false,
+            error: "Amount must be greater than 0".into(),
+        }).into_response();
+    }
+
+    // Create instruction
+    let instruction = match mint_to(
+        &spl_token::id(), // Token Program ID
+        &mint,
+        &destination,
+        &authority,
+        &[], // no multisig
+        payload.amount,
+    ) {
+        Ok(ix) => ix,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Failed to create mint_to instruction".into(),
+            }).into_response();
+        }
+    };
+
+    // Convert accounts
+    let accounts: Vec<SingleAccountResponse> = instruction.accounts.iter().map(|acc| {
+        SingleAccountResponse {
+            pubkey: acc.pubkey.to_string(),
+            is_signer: acc.is_signer,
+            is_writable: acc.is_writable,
+        }
+    }).collect();
+
+    let res = CreateTokenResponse {
+        program_id: instruction.program_id.to_string(),
+        accounts,
+        instruction_data: base64::encode(instruction.data),
+    };
+
+    Json(SuccessResponse {
+        success: true,
+        data: res,
+    }).into_response()
+}
+
+
+
+
 
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/check-health", get(check_health))
         .route("/keypair", post(create_wallet))
-        .route("/token/create", post(create_token));
+        .route("/token/create", post(create_token))
+        .route("/token/mint", post(mint_token));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
