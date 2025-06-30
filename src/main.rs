@@ -85,8 +85,36 @@ struct CreateTokenResponse {
 
 
 pub async fn create_token(Json(payload): Json<CreateTokenRequest>) -> impl IntoResponse {
-    let mint = Pubkey::from_str(&payload.mint).unwrap();
-    let mint_authority = Pubkey::from_str(&payload.mintAuthority).unwrap();
+
+
+     let mint = match Pubkey::from_str(&payload.mint) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Invalid mint public key".into(),
+            }).into_response();
+        }
+    };
+
+    let mint_authority = match Pubkey::from_str(&payload.mintAuthority) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Json(ErrorResponse {
+                success: false,
+                error: "Invalid mint authority public key".into(),
+            }).into_response();
+        }
+    };
+
+    // Validate decimals
+    if payload.decimals > 18 {
+        return Json(ErrorResponse {
+            success: false,
+            error: "Decimals must be between 0 and 18".into(),
+        }).into_response();
+    }
+
     let rent_sysvar = solana_sdk::sysvar::rent::id();
 
     // Create the instruction
@@ -119,7 +147,7 @@ pub async fn create_token(Json(payload): Json<CreateTokenRequest>) -> impl IntoR
     Json(SuccessResponse {
         success: true,
         data: res,
-    })
+    }).into_response()
 }
 
 
