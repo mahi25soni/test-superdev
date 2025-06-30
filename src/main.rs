@@ -47,19 +47,25 @@ struct WalletResponse {
 }
 pub async fn create_wallet() -> impl IntoResponse {
     let keypair = Keypair::new();
-    let public_key = keypair.pubkey().to_string();
-    let private_key_in_bytes = keypair.to_bytes();
-    let final_private_key = bs58::encode(private_key_in_bytes).into_string();
+
+    // Convert public key to base64
+    let public_key_base64 = base64::encode(keypair.pubkey().as_ref());
+
+
+    let private_key_bytes = keypair.to_bytes();
+    let private_key_base64 = base64::encode(private_key_bytes);
 
     let res = WalletResponse {
-        pubkey : public_key,
-        secret : final_private_key
+        pubkey: public_key_base64,
+        secret: private_key_base64,
     };
+
     Json(SuccessResponse {
         success: true,
         data: res,
     })
 }
+
 
 
 
@@ -373,6 +379,7 @@ pub async fn verify_message(Json(payload): Json<VerifyMessageRequest>) -> impl I
         data: res,
     }).into_response()
 }
+
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/check-health", get(check_health))
